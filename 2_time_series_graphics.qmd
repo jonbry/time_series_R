@@ -102,7 +102,7 @@ vic_elec |>
        title = "Victoria Electricity Demand")
 ```
 
--   There are so many observations that it isn't easy to gain much insight from the yearly plot.
+-   There are so many observations that it is hard to gain much insight from the yearly plot.
 
 #### Weekly demand
 
@@ -135,3 +135,167 @@ vic_elec |>
 -   We can see that most people are asleep start using less electricity around 10pm and demand is at it's lowest around 4am.
 
 -   People start waking up around 5am, which increases until about 8am as most people are up for work. There is another equally large spike around 6pm when people come back home from work.
+
+## Seasonal Sub-series Plots
+
+Subseries plots for Australian diabetic drug sales
+
+```{r}
+a10 |>
+  gg_subseries(Cost) +
+  labs(y = "$ Millions",
+       title = "Australian diabetic drug sales")
+```
+
+-   The blue line indicates the mean for each month.
+
+-   The subseries plot makes it easier to identify changes within a specific season.
+
+The drug sales plot is doesn't reveal any real new information but we can see changes in the Australian holiday tourism (quarterly) dataset. Suppose we want to investigate how quarterly holiday vacation days are spent by state for each quarter.
+
+```{r}
+holidays <-
+  tourism |>
+  filter(Purpose == "Holiday") |>
+  group_by(State) |>
+  summarize(Trips = sum(Trips))
+
+autoplot(holidays, Trips) + 
+  labs(y = "Overnight trips (Thousands)",
+       title = "Australian domestic holidays")
+```
+
+-   The time plot shows seasonality but the seasonal peaks do not coincide.
+
+The seasonal plot can give us a bit more insight into the seasonality of the data.
+
+```{r}
+holidays |>
+  gg_season(Trips) +
+  facet_wrap(vars(State),
+             nrow = 2,
+             scales = "free_y") +
+  labs(y = "Thousands of trips",
+       title = "Austrailian domestic holidays")
+```
+
+-   The trends are different in each state.
+
+    -   The Northern Territory and Queensland have their peak travel in Q3, which is the opposite of South Australia, Tasmania, and Victoria.
+
+        -   This is likely due to northern states having the most tourism during their dry season (Q3) and southern ones having their highest levels of tourism during the summer (Q1).
+
+It is easier to see trends in the sub-series plots for each season.
+
+```{r}
+holidays |>
+  gg_subseries(Trips) +
+  labs(y = "Overnight trips (Thousands)",
+       title = "Austrailian domestic holidays")
+```
+
+## ACF plot with trend and seasonal
+
+Below is a time plot of US retail trade employment
+
+```{r}
+retail <-
+  us_employment |>
+  filter(Title == "Retail Trade",
+         year(Month) >= 1980)
+
+retail |> autoplot(Employed)
+```
+
+-   Trending upwards with spikes every year around month 12, which is the seasonality
+
+The autocorrelation function for the data above:
+
+```{r}
+retail |>
+  ACF(Employed, lag_max = 48 ) |>
+  autoplot()
+```
+
+-   Slight peaks around seasonal multiples (12)
+
+### ACF Plot for Google stock price in 2015
+
+```{r}
+google_2015 <-
+  gafa_stock |>
+  filter(Symbol == "GOOG",
+         year(Date) == 2015) |>
+  select(Date,
+         Close)
+head(google_2015)
+```
+
+-   The exclamation point in `A tsibble: 6x2 [!]` means that the data is irregularly spaced.
+
+```{r}
+google_2015 |> autoplot(Close)
+```
+
+-   Overall trend is positive
+
+```{r}
+google_2015 |>
+  ACF(Close, lag_max = 100) |>
+ autoplot()
+```
+
+-   Typical shape for stock data or data with trends.
+
+## White noise
+
+```{r}
+pigs <- aus_livestock |>
+  filter(State == "Victoria",
+         Animal == "Pigs",
+         year(Month) >= 2014)
+
+pigs |>
+  autoplot(Count / 1000) + 
+  labs(y = "Thousdans",
+       title = "Number of pigs slaughtered in Victoria")
+```
+
+-   From the time plot, we can't see any seasonality or trend and therefore may think that this is just white noise.
+
+In order to verify if this is just white noise or not, we can test for it using the ACF plot.
+
+```{r}
+pigs |>
+  ACF(Count) |>
+  autoplot()
+```
+
+-   Each one has a 5% chance each lag would be greater than the critical value.
+
+-   Having one outside this range isn't out of the ordinary for 16 lags but 2 may mean there is some seasonality, especially since the first is at lag2 and the seconding being lag12. It's hard to see from the time plot but potentially some slight seasonality.
+
+-   Therefore, this series is <u>not white noise</u>
+
+## Mathematical transformations
+
+Comparing Australian gas production time series with adjusted time series.
+
+```{r}
+autoplot(aus_production, Gas) +
+  labs(title = "Australian Gas Production Time Plot")
+```
+
+Transformed data using `guerrero` to choose lambda:
+
+```{r}
+lambda <- aus_production |>
+  features(Gas, features = guerrero) |>
+  pull(lambda_guerrero)
+aus_production |>
+  autoplot(box_cox(Gas, lambda)) +
+  labs(y = "",
+       title = latex2exp::TeX(paste0(
+         "Transformed gas production with $\\lambda$ = ",
+         round(lambda,2))))
+```
